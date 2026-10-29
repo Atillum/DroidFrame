@@ -11,4 +11,5 @@ Copy-Item "$unpack/scrcpy-win64-v5.0.1/*" "$output/deps/scrcpy/" -Recurse -Force
 dotnet publish "$root/windows/DroidFrame.csproj" -c Release -r win-x64 --self-contained true -o $output
 if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed' }
 Copy-Item -Path "$root/LICENSE","$root/THIRD-PARTY.md","$root/README.md" -Destination $output
+Copy-Item -Path "$root/licenses" -Destination $output -Recurse -Force
 # app-local native/runtime files are kept together for fast startup, without extraction.
