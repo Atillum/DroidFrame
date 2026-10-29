@@ -16,6 +16,10 @@ static class SelfTest
             Check(Native.GetParent(child.Handle)==host.Handle,"Native window embedding");child.Close();host.Close();
         }
         using(var form=new MainForm()) { Check(form.Text=="DroidFrame","UI construction"); }
+        // The STA entry point blocks on this test Task rather than running the
+        // normal Application.Run message loop. Temporary Forms above install a
+        // WinForms synchronization context; do not capture it in async I/O.
+        SynchronizationContext.SetSynchronizationContext(null);
         await Tools.Run(Tools.Adb,["version"]);await Tools.Run(Tools.Scrcpy,["--version"]);
         string folder=Path.Combine(Path.GetTempPath(),"DroidFrame test с пробелами "+Guid.NewGuid());Directory.CreateDirectory(folder);
         try

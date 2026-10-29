@@ -35,7 +35,13 @@ jobs:
         if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
         shell: msys2 {0}
         run: bash scripts/build-ffmpeg.sh windows "$PWD/dist/DroidFrame-Windows-x64/deps/ffmpeg"
+      - uses: actions/cache/save@v4
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        with:
+          path: dist/DroidFrame-Windows-x64/deps/ffmpeg
+          key: ffmpeg-windows-${{ hashFiles('scripts/build-ffmpeg.sh') }}
       - name: Test packaged app and compression
+        timeout-minutes: 3
         shell: pwsh
         run: |
           $app = Join-Path $PWD 'dist/DroidFrame-Windows-x64/DroidFrame.exe'
