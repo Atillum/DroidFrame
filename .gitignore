@@ -1,0 +1,14 @@
+.DS_Store
+dist/
+.build/
+bin/
+obj/
+*.user
+*.log
+*.mp4
+*.mov
+*.png
+*.zip
+*.app/
+self-test-*.json
+self-test-error.txt

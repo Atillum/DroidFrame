@@ -1,0 +1,89 @@
+name: Build and release DroidFrame
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: mingw-w64-x86_64-gcc mingw-w64-x86_64-nasm mingw-w64-x86_64-pkgconf make diffutils curl tar openssl
+      - name: Build portable Windows app
+        shell: pwsh
+        run: ./scripts/build-windows.ps1
+      - name: Build minimal FFmpeg from pinned sources
+        shell: msys2 {0}
+        run: bash scripts/build-ffmpeg.sh windows "$PWD/dist/DroidFrame-Windows-x64/deps/ffmpeg"
+      - name: Test packaged app and compression
+        shell: pwsh
+        run: |
+          $app = Join-Path $PWD 'dist/DroidFrame-Windows-x64/DroidFrame.exe'
+          $process = Start-Process $app -ArgumentList '--self-test' -PassThru -Wait
+          if ($process.ExitCode -ne 0) {
+            Get-Content dist/DroidFrame-Windows-x64/self-test-error.txt -ErrorAction SilentlyContinue
+            throw 'Packaged self-tests failed'
+          }
+          Get-Content dist/DroidFrame-Windows-x64/self-test-report.json
+          Remove-Item dist/DroidFrame-Windows-x64/self-test-report.json
+          Compress-Archive dist/DroidFrame-Windows-x64 -DestinationPath dist/DroidFrame-Windows-x64.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DroidFrame-Windows-x64
+          path: dist/DroidFrame-Windows-x64.zip
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: Windows-diagnostics
+          path: |
+            dist/DroidFrame-Windows-x64/self-test-error.txt
+            dist/DroidFrame-Windows-x64/self-test-report.json
+  macos:
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Mac application and bundled FFmpeg
+        run: bash scripts/build-macos.sh
+      - name: Verify and archive
+        run: |
+          dist/DroidFrame.app/Contents/MacOS/DroidFrame --unit-test
+          codesign --verify --deep --strict dist/DroidFrame.app
+          mkdir -p dist/DroidFrame-macOS-Apple-Silicon
+          ditto dist/DroidFrame.app dist/DroidFrame-macOS-Apple-Silicon/DroidFrame.app
+          cp README.md THIRD-PARTY.md dist/DroidFrame-macOS-Apple-Silicon/
+          ditto -c -k --sequesterRsrc --keepParent dist/DroidFrame-macOS-Apple-Silicon dist/DroidFrame-macOS-Apple-Silicon.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DroidFrame-macOS-Apple-Silicon
+          path: dist/DroidFrame-macOS-Apple-Silicon.zip
+  release:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: [windows, macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Publish preview builds for testing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v1.6.0-preview.${GITHUB_RUN_NUMBER}"
+          sha256sum artifacts/*.zip > artifacts/SHA256SUMS.txt
+          gh release create "$tag" artifacts/*.zip artifacts/SHA256SUMS.txt --target "$GITHUB_SHA" --title "DroidFrame 1.6.0 — preview ${GITHUB_RUN_NUMBER}" --prerelease --notes-file RELEASE-NOTES.md
