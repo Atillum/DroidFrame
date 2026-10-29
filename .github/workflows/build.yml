@@ -4,6 +4,9 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -20,10 +23,16 @@ jobs:
           msystem: MINGW64
           update: true
           install: mingw-w64-x86_64-gcc mingw-w64-x86_64-nasm mingw-w64-x86_64-pkgconf make diffutils curl tar openssl
+      - uses: actions/cache@v4
+        id: ffmpeg-cache
+        with:
+          path: dist/DroidFrame-Windows-x64/deps/ffmpeg
+          key: ffmpeg-windows-${{ hashFiles('scripts/build-ffmpeg.sh') }}
       - name: Build portable Windows app
         shell: pwsh
         run: ./scripts/build-windows.ps1
       - name: Build minimal FFmpeg from pinned sources
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
         shell: msys2 {0}
         run: bash scripts/build-ffmpeg.sh windows "$PWD/dist/DroidFrame-Windows-x64/deps/ffmpeg"
       - name: Test packaged app and compression
@@ -54,7 +63,14 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        id: ffmpeg-cache
+        with:
+          path: dist/DroidFrame.app/Contents/Resources/ffmpeg
+          key: ffmpeg-macos-${{ hashFiles('scripts/build-ffmpeg.sh') }}
       - name: Build Mac application and bundled FFmpeg
+        env:
+          SKIP_FFMPEG: ${{ steps.ffmpeg-cache.outputs.cache-hit == 'true' && '1' || '0' }}
         run: bash scripts/build-macos.sh
       - name: Verify and archive
         run: |

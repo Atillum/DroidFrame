@@ -3,6 +3,10 @@ set -euo pipefail
 platform="${1:?windows or macos}"; destination="${2:?absolute output directory}"
 repo="$(cd "$(dirname "$0")/.." && pwd)"
 build="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/droidframe-ffmpeg-$platform"
+if [ "$platform" = windows ]; then
+  build="$(cygpath -u "$build")"
+  destination="$(cygpath -u "$destination")"
+fi
 mkdir -p "$build/source" "$destination/Sources" "$destination/Licenses"
 fetch() { if [ ! -f "$2" ]; then curl --retry 3 -fsSL "$1" -o "$2"; fi; }
 check() { actual=$(openssl dgst -sha256 "$1" | awk '{print $NF}'); [ "$actual" = "$2" ] || { echo "Checksum mismatch: $1"; exit 1; }; }
